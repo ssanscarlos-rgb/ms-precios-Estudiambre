@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: ms-precios
+  version: 1.0.0
+  description: |
+    EstudiAmbre Fase II. Radar de precios.
+    Todas las rutas /v1 requieren `Authorization: Bearer <Google JWT>` (validado por APIM) y,
+    en Azure, el certificado cliente de APIM. Los errores usan `{status, message, correlationId}`.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /v1/precios:
+    get:
+      summary: Precios por tienda, del más barato al más caro
+      tags: [Precios]
+      parameters:
+        - { name: producto, in: query, schema: { type: string }, description: Producto (sin distinguir mayúsculas ni tildes). Vacío = todos }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: Página de precios
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagePrecios' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      properties:
+        status: { type: integer, example: 400 }
+        message: { type: string }
+        correlationId: { type: string }
+    Precio:
+      type: object
+      properties:
+        id: { type: string }
+        tienda: { type: string }
+        zona: { type: string }
+        precio: { type: number }
+        reportes: { type: integer }
+    PagePrecios:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/Precio' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        totalPages: { type: integer }
