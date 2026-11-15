@@ -16,7 +16,7 @@ paths:
       summary: Precios por tienda, del más barato al más caro
       tags: [Precios]
       parameters:
-        - { name: producto, in: query, schema: { type: string }, description: Producto (sin distinguir mayúsculas ni tildes). Vacío = todos }
+        - { name: producto, in: query, schema: { type: string }, description: 'Producto. Sin distinguir mayúsculas ni tildes. Primero busca el nombre exacto; si no hay, devuelve los productos que contengan TODAS las palabras escritas, en cualquier orden (arroz, pelon arroz). Vacío = todos. Agrupado por producto y, dentro de cada uno, del más barato al más caro' }
         - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
         - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
       responses:
@@ -48,6 +48,7 @@ components:
       type: object
       properties:
         id: { type: string }
+        producto: { type: string, example: Arroz Tío Pelón 1 kg }
         tienda: { type: string }
         zona: { type: string }
         precio: { type: number }

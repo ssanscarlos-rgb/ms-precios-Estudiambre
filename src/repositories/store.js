@@ -6,10 +6,26 @@ const { MongoClient } = require('mongodb');
 //
 //   get(id)                              -> documento | null
 //   set(id, campos)                      -> crea o actualiza ($set) el documento con _id = id
-//   page(filtro, { sort, skip, limit })  -> { items, total }   (filtro: igualdad por campo)
+//   page(filtro, { sort, skip, limit })  -> { items, total }   (filtro: igualdad por campo; o { contiene: [palabras] } =
+//                                           el texto contiene TODAS las palabras, en cualquier orden)
 //   ensureIndex(campos)                  -> índice para las consultas ordenadas (no hace nada en memoria)
 
 const sinId = ({ _id, ...resto }) => ({ id: _id, ...resto });
+
+const esContiene = (v) => v && typeof v === 'object' && Array.isArray(v.contiene);
+const escapar = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Filtro de la interfaz -> filtro de MongoDB.
+function aMongo(filtro) {
+  const salida = {};
+  const y = [];
+  for (const [campo, v] of Object.entries(filtro)) {
+    if (esContiene(v)) v.contiene.forEach((p) => y.push({ [campo]: { $regex: escapar(p) } }));
+    else salida[campo] = v;
+  }
+  if (y.length) salida.$and = y;
+  return salida;
+}
 
 // ---------- Memoria ----------
 function memoryStore() {
@@ -23,7 +39,8 @@ function memoryStore() {
       docs.set(id, { ...(docs.get(id) || {}), ...campos, _id: id });
     },
     async page(filtro, { sort = [], skip = 0, limit = 10 } = {}) {
-      const todos = [...docs.values()].filter((d) => Object.entries(filtro).every(([k, v]) => d[k] === v));
+      const cumple = (d, k, v) => (esContiene(v) ? v.contiene.every((p) => String(d[k] ?? '').includes(p)) : d[k] === v);
+      const todos = [...docs.values()].filter((d) => Object.entries(filtro).every(([k, v]) => cumple(d, k, v)));
       todos.sort((a, b) => {
         for (const [campo, dir] of sort) {
           if (a[campo] !== b[campo]) return (a[campo] < b[campo] ? -1 : 1) * dir;
@@ -72,6 +89,7 @@ function mongoStore(nombre) {
     },
     async page(filtro, { sort = [], skip = 0, limit = 10 } = {}) {
       const c = await col();
+      filtro = aMongo(filtro);
       const cursor = c.find(filtro);
       if (sort.length) cursor.sort(sort);
       const [items, total] = await Promise.all([cursor.skip(skip).limit(limit).toArray(), c.countDocuments(filtro)]);

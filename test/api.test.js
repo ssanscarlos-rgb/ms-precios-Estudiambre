@@ -51,10 +51,23 @@ test('GET /precios: ordenado por precio, sin tildes/mayúsculas y paginado', asy
   assert.equal(p.content.length, 3);
   const precios = p.content.map((x) => x.precio);
   assert.deepEqual(precios, [...precios].sort((a, b) => a - b));
-  assert.deepEqual(Object.keys(p.content[0]).sort(), ['id', 'precio', 'reportes', 'tienda', 'zona']);
+  assert.deepEqual(Object.keys(p.content[0]).sort(), ['id', 'precio', 'producto', 'reportes', 'tienda', 'zona']);
 
   const p2 = await (await fetch(`${base}/v1/precios?producto=Arroz%20Tio%20Pelon%201%20kg&page=1&size=3`, { headers: auth() })).json();
   assert.equal(p2.content.length, 1);
+});
+
+test('GET /precios: una palabra suelta encuentra el producto, en cualquier orden, sin tildes', async () => {
+  for (const q of ['arroz', 'ARROZ', 'pelon arroz', 'Tío Pelón']) {
+    const p = await (await fetch(`${base}/v1/precios?producto=${encodeURIComponent(q)}&size=50`, { headers: auth() })).json();
+    assert.equal(p.totalElements, 4, q);
+    assert.ok(p.content.every((x) => x.producto === 'Arroz Tío Pelón 1 kg'), q);
+  }
+  const mezcla = await (await fetch(`${base}/v1/precios?producto=1&size=50`, { headers: auth() })).json();
+  assert.ok(new Set(mezcla.content.map((x) => x.producto)).size > 1, 'una búsqueda amplia puede traer varios productos');
+  const pares = mezcla.content.map((x) => [x.producto, x.precio]);
+  const ordenado = [...pares].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
+  assert.deepEqual(pares, ordenado, 'agrupado por producto y de menor a mayor precio dentro de cada uno');
 });
 
 test('GET /precios valida parámetros y producto desconocido da página vacía', async () => {
@@ -63,6 +76,17 @@ test('GET /precios valida parámetros y producto desconocido da página vacía',
   const p = await (await fetch(`${base}/v1/precios?producto=inexistente`, { headers: auth() })).json();
   assert.equal(p.totalElements, 0);
   assert.deepEqual(p.content, []);
+});
+
+test('GET /precios: cada producto cargado devuelve todas sus tiendas, de menor a mayor precio', async () => {
+  const data = require('../scripts/seed-data');
+  for (const [producto, filas] of Object.entries(data)) {
+    const r = await fetch(`${base}/v1/precios?producto=${encodeURIComponent(producto)}&size=50`, { headers: auth() });
+    const p = await r.json();
+    assert.equal(p.totalElements, filas.length, producto);
+    const precios = p.content.map((x) => x.precio);
+    assert.deepEqual(precios, [...precios].sort((x, y) => x - y), producto);
+  }
 });
 
 test('filtro de certificado: 403 sin cert o con cert distinto, 200 con el correcto', async () => {

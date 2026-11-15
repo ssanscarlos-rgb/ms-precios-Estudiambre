@@ -6,7 +6,7 @@ Microservicio de **Precios** de EstudiAmbre (Fase II). Node 20+ / Express, datos
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/v1/precios?producto=&page=&size=` | Tiendas ordenadas por precio. `{content, page, size, totalElements, totalPages}` (página base 0, `size` máx. 50) |
+| GET | `/v1/precios?producto=&page=&size=` | Tiendas ordenadas por precio. `{content, page, size, totalElements, totalPages}` (página base 0, `size` máx. 50). La búsqueda acepta el nombre completo o palabras sueltas (`arroz`, `pelon arroz`): cada fila trae su `producto` |
 | GET | `/health` | Sin autenticación |
 | GET | `/swagger` | Swagger UI (spec en `/openapi.json`) |
 
@@ -49,6 +49,7 @@ Todas (menos las dos últimas) también como *App settings* del App Service. Pon
 
 - **MongoDB (NoSQL documental)**: los precios son documentos independientes que se consultan por producto, se ordenan y se paginan en la base (`skip`/`limit`, índice `{producto, precio, reportes}`).
 - **Precios**: un documento por precio, con `producto` normalizado (minúsculas, sin tildes). Datos de ejemplo con los nombres del catálogo del frontend.
+- **Búsqueda por palabras**: primero se busca el nombre exacto (lo que llega al elegir una sugerencia); si no hay resultados, se buscan los productos cuyo nombre normalizado contenga **todas** las palabras escritas. Cada documento guarda además `nombre` (para mostrar). Si ya habías cargado datos antes de este cambio, corre `npm run seed` otra vez: es idempotente (mismos `_id`) y solo agrega `nombre`; mientras tanto la API devuelve el nombre normalizado.
 - Precios en colones, enteros.
 - **Un servicio por contexto**: este servicio solo conoce su base; no lee los datos de su par (`ms-perfil`).
 - **Identidad**: se lee `sub` del JWT sin revalidar la firma; APIM ya la validó y solo APIM llega al backend (certificado).
