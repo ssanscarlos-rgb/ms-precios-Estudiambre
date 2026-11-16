@@ -57,17 +57,38 @@ test('GET /precios: ordenado por precio, sin tildes/mayúsculas y paginado', asy
   assert.equal(p2.content.length, 1);
 });
 
-test('GET /precios: una palabra suelta encuentra el producto, en cualquier orden, sin tildes', async () => {
-  for (const q of ['arroz', 'ARROZ', 'pelon arroz', 'Tío Pelón']) {
+test('GET /precios: una palabra suelta encuentra todos los tipos, en cualquier orden, sin tildes', async () => {
+  // "arroz" trae los 7 tipos de arroz, agrupados por producto y de menor a mayor precio dentro de cada uno.
+  for (const q of ['arroz', 'ARROZ']) {
+    const p = await (await fetch(`${base}/v1/precios?producto=${encodeURIComponent(q)}&size=50`, { headers: auth() })).json();
+    assert.ok(p.content.every((x) => x.producto.toLowerCase().includes('arroz')), q);
+    assert.equal(new Set(p.content.map((x) => x.producto)).size, 7, q);
+    const norm = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const pares = p.content.map((x) => [norm(x.producto), x.precio]);
+    const ordenado = [...pares].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
+    assert.deepEqual(pares, ordenado, 'agrupado por producto y de menor a mayor precio dentro de cada uno');
+  }
+  // Varias palabras en cualquier orden y sin tildes: solo el arroz Tío Pelón de 1 kg.
+  for (const q of ['pelon arroz 1 kg', 'TÍO PELÓN ARROZ 1 KG']) {
     const p = await (await fetch(`${base}/v1/precios?producto=${encodeURIComponent(q)}&size=50`, { headers: auth() })).json();
     assert.equal(p.totalElements, 4, q);
     assert.ok(p.content.every((x) => x.producto === 'Arroz Tío Pelón 1 kg'), q);
   }
-  const mezcla = await (await fetch(`${base}/v1/precios?producto=1&size=50`, { headers: auth() })).json();
-  assert.ok(new Set(mezcla.content.map((x) => x.producto)).size > 1, 'una búsqueda amplia puede traer varios productos');
-  const pares = mezcla.content.map((x) => [x.producto, x.precio]);
-  const ordenado = [...pares].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
-  assert.deepEqual(pares, ordenado, 'agrupado por producto y de menor a mayor precio dentro de cada uno');
+});
+
+test('catálogo: 7 tipos por producto esencial y 3 por producto específico, cada uno con varias tiendas', () => {
+  const data = require('../scripts/seed-data');
+  const familias = require('../scripts/seed-familias');
+  for (const [familia, tipos] of Object.entries(familias.esenciales)) {
+    assert.ok(tipos.length >= 7, `${familia}: ${tipos.length} tipos`);
+    for (const [nombre] of tipos) assert.ok(data[nombre]?.length >= 3, `${nombre} sin tiendas suficientes`);
+  }
+  for (const [familia, tipos] of Object.entries(familias.especificos)) {
+    assert.ok(tipos.length >= 3, `${familia}: ${tipos.length} tipos`);
+    for (const [nombre] of tipos) assert.ok(data[nombre]?.length >= 3, `${nombre} sin tiendas suficientes`);
+  }
+  const ids = Object.values(data).flat().map((f) => f.id);
+  assert.equal(new Set(ids).size, ids.length, 'los ids de las filas son únicos (el seed se puede repetir)');
 });
 
 test('GET /precios valida parámetros y producto desconocido da página vacía', async () => {
